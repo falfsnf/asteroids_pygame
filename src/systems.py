@@ -32,6 +32,13 @@ class World:
         self.combo_multiplier = 1
         self.combo_timer = 0.0
 
+    def should_spawn_resistant(self, size: str) -> bool:
+        if size == "L":
+            return random() < C.RESISTANT_ASTEROID_CHANCE_L
+        if size == "M":
+            return random() < C.RESISTANT_ASTEROID_CHANCE_M
+        return False
+
     def start_wave(self):
         self.wave += 1
         count = 3 + self.wave
@@ -44,12 +51,13 @@ class World:
             ang = uniform(0, math.tau)
             speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX)
             vel = Vec(math.cos(ang), math.sin(ang)) * speed
-            self.spawn_asteroid(pos, vel, "L")
+            resistant = self.should_spawn_resistant("L")
+            self.spawn_asteroid(pos, vel, "L", resistant=resistant)
 
-    def spawn_asteroid(self, pos: Vec, vel: Vec, size: str):
-        a = Asteroid(pos, vel, size)
-        self.asteroids.add(a)
-        self.all_sprites.add(a)
+    def spawn_asteroid(self, pos: Vec, vel: Vec, size: str, resistant: bool = False):
+        asteroid = Asteroid(pos, vel, size, resistant=resistant)
+        self.asteroids.add(asteroid)
+        self.all_sprites.add(asteroid)
 
     def spawn_shield_pickup(self, pos: Vec):
         pickup = ShieldPickup(pos)
@@ -143,7 +151,8 @@ class World:
             collided=lambda a, b: (a.pos - b.pos).length() < a.r,
         )
         for asteroid, _ in hits.items():
-            self.split_asteroid(asteroid)
+            if asteroid.take_hit():
+                self.split_asteroid(asteroid)
 
         ufo_hits = pg.sprite.groupcollide(
             self.asteroids,
@@ -153,7 +162,8 @@ class World:
             collided=lambda a, b: (a.pos - b.pos).length() < a.r,
         )
         for asteroid, _ in ufo_hits.items():
-            self.split_asteroid(asteroid)
+            if asteroid.take_hit():
+                self.split_asteroid(asteroid)
 
         for pickup in list(self.powerups):
             if (pickup.pos - self.ship.pos).length() < (pickup.r + self.ship.r):
@@ -206,7 +216,8 @@ class World:
         for new_size in split:
             direction = rand_unit_vec()
             speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
-            self.spawn_asteroid(pos, direction * speed, new_size)
+            resistant = self.should_spawn_resistant(new_size)
+            self.spawn_asteroid(pos, direction * speed, new_size, resistant=resistant)
 
     def damage_ship(self):
         if self.ship.has_shield():

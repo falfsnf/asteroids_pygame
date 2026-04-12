@@ -74,7 +74,7 @@ class ShieldPickup(pg.sprite.Sprite):
 
 
 class Asteroid(pg.sprite.Sprite):
-    def __init__(self, pos: Vec, vel: Vec, size: str):
+    def __init__(self, pos: Vec, vel: Vec, size: str, resistant: bool = False):
         super().__init__()
         self.pos = Vec(pos)
         self.vel = Vec(vel)
@@ -83,25 +83,47 @@ class Asteroid(pg.sprite.Sprite):
         self.poly = self._make_poly()
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
 
+        self.resistant = resistant
+        self.hp = C.RESISTANT_ASTEROID_HP if resistant else 1
+
     def _make_poly(self):
         steps = 12 if self.size == "L" else 10 if self.size == "M" else 8
         pts = []
         for i in range(steps):
             ang = i * (360 / steps)
             jitter = uniform(0.75, 1.2)
-            r = self.r * jitter
-            v = Vec(math.cos(math.radians(ang)), math.sin(math.radians(ang)))
-            pts.append(v * r)
+            radius = self.r * jitter
+            vec = Vec(math.cos(math.radians(ang)), math.sin(math.radians(ang)))
+            pts.append(vec * radius)
         return pts
+
+    def take_hit(self) -> bool:
+        self.hp -= 1
+        return self.hp <= 0
 
     def update(self, dt: float):
         self.pos += self.vel * dt
-        self.pos = wrap_pos(self.pos)
+
+        if self.resistant:
+            if self.pos.x - self.r <= 0 or self.pos.x + self.r >= C.WIDTH:
+                self.vel.x *= -1
+                self.pos.x = max(self.r, min(self.pos.x, C.WIDTH - self.r))
+
+            if self.pos.y - self.r <= 0 or self.pos.y + self.r >= C.HEIGHT:
+                self.vel.y *= -1
+                self.pos.y = max(self.r, min(self.pos.y, C.HEIGHT - self.r))
+        else:
+            self.pos = wrap_pos(self.pos)
+
         self.rect.center = self.pos
 
     def draw(self, surf: pg.Surface):
         pts = [(self.pos + p) for p in self.poly]
-        pg.draw.polygon(surf, C.WHITE, pts, width=1)
+        color = C.RESISTANT_ASTEROID_COLOR if self.resistant else C.WHITE
+        pg.draw.polygon(surf, color, pts, width=1)
+
+        if self.resistant and self.hp > 1:
+            pg.draw.circle(surf, C.RESISTANT_ASTEROID_COLOR, self.pos, self.r + 6, 1)
 
 
 class Ship(pg.sprite.Sprite):
@@ -126,7 +148,7 @@ class Ship(pg.sprite.Sprite):
             self.vel += angle_to_vec(self.angle) * C.SHIP_THRUST * dt
         self.vel *= C.SHIP_FRICTION
 
-    def fire(self) -> Bullet | None:
+    def fire(self):
         if self.cool > 0:
             return None
         dirv = angle_to_vec(self.angle)
@@ -202,7 +224,7 @@ class UFO(pg.sprite.Sprite):
             self.kill()
         self.rect.center = self.pos
 
-    def fire_at(self, target_pos: Vec) -> UfoBullet | None:
+    def fire_at(self, target_pos: Vec):
         if self.cool > 0:
             return None
 
