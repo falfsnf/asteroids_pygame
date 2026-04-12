@@ -29,6 +29,9 @@ class World:
         self.ufo_timer = C.UFO_SPAWN_EVERY
         self.game_over = False
 
+        self.combo_multiplier = 1
+        self.combo_timer = 0.0
+
     def start_wave(self):
         self.wave += 1
         count = 3 + self.wave
@@ -77,18 +80,38 @@ class World:
         if len(self.bullets) >= C.MAX_BULLETS:
             return
 
-        b = self.ship.fire()
-        if b:
-            self.bullets.add(b)
-            self.all_sprites.add(b)
+        bullet = self.ship.fire()
+        if bullet:
+            self.bullets.add(bullet)
+            self.all_sprites.add(bullet)
 
     def hyperspace(self):
         self.ship.hyperspace()
         self.score = max(0, self.score - C.HYPERSPACE_COST)
 
+    def register_combo(self):
+        if self.combo_timer > 0:
+            self.combo_multiplier = min(
+                self.combo_multiplier + 1,
+                C.COMBO_MAX_MULTIPLIER,
+            )
+        else:
+            self.combo_multiplier = 2
+
+        self.combo_timer = C.COMBO_WINDOW
+
+    def reset_combo(self):
+        self.combo_multiplier = 1
+        self.combo_timer = 0.0
+
     def update(self, dt: float, keys):
         self.ship.control(keys, dt)
         self.all_sprites.update(dt)
+
+        if self.combo_timer > 0:
+            self.combo_timer -= dt
+            if self.combo_timer <= 0:
+                self.reset_combo()
 
         if self.safe > 0:
             self.safe -= dt
@@ -119,8 +142,8 @@ class World:
             True,
             collided=lambda a, b: (a.pos - b.pos).length() < a.r,
         )
-        for ast, _ in hits.items():
-            self.split_asteroid(ast)
+        for asteroid, _ in hits.items():
+            self.split_asteroid(asteroid)
 
         ufo_hits = pg.sprite.groupcollide(
             self.asteroids,
@@ -129,8 +152,8 @@ class World:
             True,
             collided=lambda a, b: (a.pos - b.pos).length() < a.r,
         )
-        for ast, _ in ufo_hits.items():
-            self.split_asteroid(ast)
+        for asteroid, _ in ufo_hits.items():
+            self.split_asteroid(asteroid)
 
         for pickup in list(self.powerups):
             if (pickup.pos - self.ship.pos).length() < (pickup.r + self.ship.r):
@@ -138,8 +161,8 @@ class World:
                 pickup.kill()
 
         if self.ship.invuln <= 0 and self.safe <= 0:
-            for ast in self.asteroids:
-                if (ast.pos - self.ship.pos).length() < (ast.r + self.ship.r):
+            for asteroid in self.asteroids:
+                if (asteroid.pos - self.ship.pos).length() < (asteroid.r + self.ship.r):
                     self.damage_ship()
                     break
 
@@ -155,20 +178,23 @@ class World:
                     break
 
         for ufo in list(self.ufos):
-            for b in list(self.bullets):
-                if (ufo.pos - b.pos).length() < (ufo.r + b.r):
+            for bullet in list(self.bullets):
+                if (ufo.pos - bullet.pos).length() < (ufo.r + bullet.r):
                     score = C.UFO_SMALL["score"] if ufo.small else C.UFO_BIG["score"]
                     self.score += score
                     ufo.kill()
-                    b.kill()
+                    bullet.kill()
 
-    def split_asteroid(self, ast: Asteroid):
-        self.score += C.AST_SIZES[ast.size]["score"]
-        split = C.AST_SIZES[ast.size]["split"]
-        pos = Vec(ast.pos)
-        size = ast.size
+    def split_asteroid(self, asteroid: Asteroid):
+        base_score = C.AST_SIZES[asteroid.size]["score"]
+        self.register_combo()
+        self.score += base_score * self.combo_multiplier
 
-        ast.kill()
+        split = C.AST_SIZES[asteroid.size]["split"]
+        pos = Vec(asteroid.pos)
+        size = asteroid.size
+
+        asteroid.kill()
 
         if (
             size in ("L", "M")
@@ -177,10 +203,10 @@ class World:
         ):
             self.spawn_shield_pickup(pos)
 
-        for s in split:
-            dirv = rand_unit_vec()
+        for new_size in split:
+            direction = rand_unit_vec()
             speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
-            self.spawn_asteroid(pos, dirv * speed, s)
+            self.spawn_asteroid(pos, direction * speed, new_size)
 
     def damage_ship(self):
         if self.ship.has_shield():
@@ -190,7 +216,9 @@ class World:
         self.ship_die()
 
     def ship_die(self):
+        self.reset_combo()
         self.lives -= 1
+
         if self.lives <= 0:
             self.game_over = True
             return
@@ -202,8 +230,8 @@ class World:
         self.safe = C.SAFE_SPAWN_TIME
 
     def draw(self, surf: pg.Surface, font: pg.font.Font):
-        for spr in self.all_sprites:
-            spr.draw(surf)
+        for sprite in self.all_sprites:
+            sprite.draw(surf)
 
         pg.draw.line(surf, (60, 60, 60), (0, 50), (C.WIDTH, 50), width=1)
 
@@ -212,6 +240,19 @@ class World:
             if self.ship.has_shield()
             else "SHIELD OFF"
         )
-        txt = f"SCORE {self.score:06d} LIVES {self.lives} WAVE {self.wave} {shield_txt}"
-        label = font.render(txt, True, C.WHITE)
+
+        combo_txt = (
+            f"COMBO x{self.combo_multiplier}"
+            if self.combo_multiplier > 1 and self.combo_timer > 0
+            else "COMBO x1"
+        )
+
+        text = (
+            f"SCORE {self.score:06d} "
+            f"LIVES {self.lives} "
+            f"WAVE {self.wave} "
+            f"{shield_txt} "
+            f"{combo_txt}"
+        )
+        label = font.render(text, True, C.WHITE)
         surf.blit(label, (10, 10))
