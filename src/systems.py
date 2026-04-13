@@ -7,7 +7,7 @@ from random import random, uniform
 import pygame as pg
 
 import config as C
-from sprites import Asteroid, ShieldPickup, Ship, UFO
+from sprites import Asteroid, ShieldPickup, Ship, UFO, RapidFirePickup
 from utils import Vec, rand_edge_pos, rand_unit_vec
 
 
@@ -76,6 +76,11 @@ class World:
         ufo.dir.xy = (1, 0) if x == 0 else (-1, 0)
         self.ufos.add(ufo)
         self.all_sprites.add(ufo)
+        
+    def spawn_rapid_fire_pickup(self, pos: Vec):
+        pickup = RapidFirePickup(pos)
+        self.powerups.add(pickup)
+        self.all_sprites.add(pickup)
 
     def ufo_try_fire(self):
         for ufo in self.ufos:
@@ -167,7 +172,12 @@ class World:
 
         for pickup in list(self.powerups):
             if (pickup.pos - self.ship.pos).length() < (pickup.r + self.ship.r):
-                self.ship.activate_shield()
+                
+                if isinstance(pickup, ShieldPickup):
+                    self.ship.activate_shield()
+                elif isinstance(pickup, RapidFirePickup):
+                    self.ship.activate_rapid_fire()
+            
                 pickup.kill()
 
         if self.ship.invuln <= 0 and self.safe <= 0:
@@ -209,9 +219,14 @@ class World:
         if (
             size in ("L", "M")
             and len(self.powerups) == 0
-            and random() < C.SHIELD_DROP_CHANCE
         ):
-            self.spawn_shield_pickup(pos)
+            roll = random()
+
+            if roll < C.SHIELD_DROP_CHANCE:
+                self.spawn_shield_pickup(pos)
+
+            elif roll < C.SHIELD_DROP_CHANCE + C.RAPID_FIRE_DROP_CHANCE:
+                self.spawn_rapid_fire_pickup(pos)
 
         for new_size in split:
             direction = rand_unit_vec()
@@ -251,6 +266,12 @@ class World:
             if self.ship.has_shield()
             else "SHIELD OFF"
         )
+        
+        rapid_txt = (
+            f"RAPID {self.ship.rapid_fire:0.1f}s"
+            if self.ship.has_rapid_fire()
+            else "RAPID OFF"
+        )
 
         combo_txt = (
             f"COMBO x{self.combo_multiplier}"
@@ -263,6 +284,7 @@ class World:
             f"LIVES {self.lives} "
             f"WAVE {self.wave} "
             f"{shield_txt} "
+            f"{rapid_txt} "
             f"{combo_txt}"
         )
         label = font.render(text, True, C.WHITE)

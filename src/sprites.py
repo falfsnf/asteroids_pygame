@@ -138,6 +138,7 @@ class Ship(pg.sprite.Sprite):
         self.alive = True
         self.r = C.SHIP_RADIUS
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        self.rapid_fire = 0.0
 
     def control(self, keys: pg.key.ScancodeWrapper, dt: float):
         if keys[pg.K_LEFT]:
@@ -154,7 +155,12 @@ class Ship(pg.sprite.Sprite):
         dirv = angle_to_vec(self.angle)
         pos = self.pos + dirv * (self.r + 6)
         vel = self.vel + dirv * C.SHIP_BULLET_SPEED
-        self.cool = C.SHIP_FIRE_RATE
+        
+        rate = C.SHIP_FIRE_RATE
+        if self.has_rapid_fire():
+            rate *= C.RAPID_FIRE_MULTIPLIER
+            
+        self.cool = rate
         return Bullet(pos, vel)
 
     def hyperspace(self):
@@ -167,6 +173,12 @@ class Ship(pg.sprite.Sprite):
 
     def has_shield(self) -> bool:
         return self.shield > 0
+    
+    def has_rapid_fire(self) -> bool:
+        return self.rapid_fire > 0
+    
+    def activate_rapid_fire(self):
+        self.rapid_fire = C.RAPID_FIRE_DURATION
 
     def update(self, dt: float):
         if self.cool > 0:
@@ -178,6 +190,11 @@ class Ship(pg.sprite.Sprite):
             if self.shield < 0:
                 self.shield = 0.0
 
+        if self.rapid_fire > 0:
+            self.rapid_fire -= dt
+            if self.rapid_fire < 0:
+                self.rapid_fire = 0.0
+        
         self.pos += self.vel * dt
         self.pos = wrap_pos(self.pos)
         self.rect.center = self.pos
@@ -251,3 +268,24 @@ class UFO(pg.sprite.Sprite):
         cup = pg.Rect(0, 0, w * 0.5, h * 0.7)
         cup.center = (self.pos.x, self.pos.y - h * 0.3)
         pg.draw.ellipse(surf, C.WHITE, cup, width=1)
+               
+class RapidFirePickup(pg.sprite.Sprite):
+    def __init__(self, pos: Vec):
+        super().__init__()
+        self.pos = Vec(pos)
+        self.r = C.RAPID_FIRE_RADIUS
+        self.ttl = 8.0
+        self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        self.rect.center = self.pos
+
+    def update(self, dt: float):
+        self.ttl -= dt
+        if self.ttl <= 0:
+            self.kill()
+        self.rect.center = self.pos
+
+    def draw(self, surf: pg.Surface):
+        pg.draw.circle(surf, (0, 200, 255), self.pos, self.r, width=1)
+
+        if int(self.ttl * 6) % 2 == 0:
+            pg.draw.circle(surf, (0, 200, 255), self.pos, self.r - 4)
