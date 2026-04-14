@@ -32,7 +32,7 @@ class World:
         self.combo_multiplier = 1
         self.combo_timer = 0.0
 
-        self.shotgun_timer = 60.0
+        self.shotgun_timer = 30.0
 
     def should_spawn_resistant(self, size: str) -> bool:
         if size == "L":
@@ -141,7 +141,7 @@ class World:
         if self.shotgun_timer <= 0:
             if len(self.powerups) == 0:
                 self.spawn_shotgun_pickup()
-            self.shotgun_timer = 60.0
+            self.shotgun_timer = 30.0
 
         if self.combo_timer > 0:
             self.combo_timer -= dt
