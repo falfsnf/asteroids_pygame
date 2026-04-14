@@ -7,7 +7,7 @@ from random import random, uniform
 import pygame as pg
 
 import config as C
-from sprites import Asteroid, ShieldPickup, Ship, UFO, RapidFirePickup
+from sprites import Asteroid, ShieldPickup, Ship, UFO, RapidFirePickup, ShotgunPickup
 from utils import Vec, rand_edge_pos, rand_unit_vec
 
 
@@ -31,6 +31,8 @@ class World:
 
         self.combo_multiplier = 1
         self.combo_timer = 0.0
+
+        self.shotgun_timer = 60.0
 
     def should_spawn_resistant(self, size: str) -> bool:
         if size == "L":
@@ -64,6 +66,17 @@ class World:
         self.powerups.add(pickup)
         self.all_sprites.add(pickup)
 
+    def spawn_rapid_fire_pickup(self, pos: Vec):
+        pickup = RapidFirePickup(pos)
+        self.powerups.add(pickup)
+        self.all_sprites.add(pickup)
+
+    def spawn_shotgun_pickup(self):
+        pos = Vec(uniform(50, C.WIDTH - 50), uniform(50, C.HEIGHT - 50))
+        pickup = ShotgunPickup(pos)
+        self.powerups.add(pickup)
+        self.all_sprites.add(pickup)
+
     def spawn_ufo(self):
         if self.ufos:
             return
@@ -76,11 +89,6 @@ class World:
         ufo.dir.xy = (1, 0) if x == 0 else (-1, 0)
         self.ufos.add(ufo)
         self.all_sprites.add(ufo)
-        
-    def spawn_rapid_fire_pickup(self, pos: Vec):
-        pickup = RapidFirePickup(pos)
-        self.powerups.add(pickup)
-        self.all_sprites.add(pickup)
 
     def ufo_try_fire(self):
         for ufo in self.ufos:
@@ -93,10 +101,18 @@ class World:
         if len(self.bullets) >= C.MAX_BULLETS:
             return
 
-        bullet = self.ship.fire()
-        if bullet:
-            self.bullets.add(bullet)
-            self.all_sprites.add(bullet)
+        if self.ship.has_shotgun():
+            result = self.ship.fire_shotgun()
+        else:
+            result = self.ship.fire()
+
+        if isinstance(result, list):
+            for b in result:
+                self.bullets.add(b)
+                self.all_sprites.add(b)
+        elif result:
+            self.bullets.add(result)
+            self.all_sprites.add(result)
 
     def hyperspace(self):
         self.ship.hyperspace()
@@ -120,6 +136,12 @@ class World:
     def update(self, dt: float, keys):
         self.ship.control(keys, dt)
         self.all_sprites.update(dt)
+
+        self.shotgun_timer -= dt
+        if self.shotgun_timer <= 0:
+            if len(self.powerups) == 0:
+                self.spawn_shotgun_pickup()
+            self.shotgun_timer = 60.0
 
         if self.combo_timer > 0:
             self.combo_timer -= dt
@@ -172,12 +194,14 @@ class World:
 
         for pickup in list(self.powerups):
             if (pickup.pos - self.ship.pos).length() < (pickup.r + self.ship.r):
-                
+
                 if isinstance(pickup, ShieldPickup):
                     self.ship.activate_shield()
                 elif isinstance(pickup, RapidFirePickup):
                     self.ship.activate_rapid_fire()
-            
+                elif isinstance(pickup, ShotgunPickup):
+                    self.ship.activate_shotgun()
+
                 pickup.kill()
 
         if self.ship.invuln <= 0 and self.safe <= 0:
@@ -216,10 +240,7 @@ class World:
 
         asteroid.kill()
 
-        if (
-            size in ("L", "M")
-            and len(self.powerups) == 0
-        ):
+        if size in ("L", "M") and len(self.powerups) == 0:
             roll = random()
 
             if roll < C.SHIELD_DROP_CHANCE:
@@ -266,7 +287,7 @@ class World:
             if self.ship.has_shield()
             else "SHIELD OFF"
         )
-        
+
         rapid_txt = (
             f"RAPID {self.ship.rapid_fire:0.1f}s"
             if self.ship.has_rapid_fire()
