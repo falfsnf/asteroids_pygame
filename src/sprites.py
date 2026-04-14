@@ -324,3 +324,24 @@ class RapidFirePickup(pg.sprite.Sprite):
 
         if int(self.ttl * 6) % 2 == 0:
             pg.draw.circle(surf, (0, 200, 255), self.pos, self.r - 4)
+            
+class ShotgunPickup(pg.sprite.Sprite):
+    def __init__(self, pos: Vec):
+        super().__init__()
+        self.pos = Vec(pos)
+        self.r = C.RAPID_FIRE_RADIUS
+        self.ttl = 8.0
+        self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        self.rect.center = self.pos
+
+    def update(self, dt: float):
+        self.ttl -= dt
+        if self.ttl <= 0:
+            self.kill()
+        self.rect.center = self.pos
+
+    def draw(self, surf: pg.Surface):
+        pg.draw.circle(surf, (0, 255, 0), self.pos, self.r, width=1)
+
+        if int(self.ttl * 6) % 2 == 0:
+            pg.draw.circle(surf, (0, 255, 0), self.pos, self.r - 4)
