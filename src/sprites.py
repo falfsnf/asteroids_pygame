@@ -57,7 +57,7 @@ class ShieldPickup(pg.sprite.Sprite):
         super().__init__()
         self.pos = Vec(pos)
         self.r = C.SHIELD_PICKUP_RADIUS
-        self.ttl = 8.0
+        self.ttl = 12.0
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
         self.rect.center = self.pos
 
